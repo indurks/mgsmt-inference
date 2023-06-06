@@ -66,7 +66,7 @@ class FactoredLexiconLaTeXView:
 
     def __init__(self, grammar):
         self.grammar = grammar
-        self.crossings = grammar.lexicon_model.get_pf_lexicon_crossing_occurrences()
+        self.crossings = grammar.lexicon_model.get_pf_lexicon_crossing_occurrences(input_lexicon_lr=self.grammar.init_lex_repr)
         self.latex_source_filepath = None
 
 

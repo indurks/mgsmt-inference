@@ -46,6 +46,7 @@ class LexiconFormula(SMTFormula):
 
     def create_lexicon(solver, pf_interface, params, verbose=False):
         str_eval = lambda s: s if type(s) is not str else eval(s)
+
         num_lex_nodes = ((len(pf_interface.overt_forms) * params['num_overt_lexical_entries_per_form'] +
                           len(pf_interface.covert_forms) * params['num_covert_lexical_entries_per_form'])
                          * params['max_num_features_per_lexical_entry'] + 2)
@@ -60,6 +61,9 @@ class LexiconFormula(SMTFormula):
                             licensing_feature_labels=str_eval(params['licensing_feature_labels']),
                             factored_lexicon=True)
 
+        ## Note this is a handy assertion when debugging incremental acquisition.
+        # assert params['num_overt_lexical_entries_per_form'] == params['max_num_overt_pf_connections']
+        
         # Add lexical entries for the overt (pronounced) phonetic forms.
         for word in pf_interface.overt_forms:
             for i in range(params['num_overt_lexical_entries_per_form']):

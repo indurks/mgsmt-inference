@@ -69,10 +69,11 @@ completion of a parse. %s}
 
 class LexiconModelLaTeXView:
 
-    def __init__(self, lexicon_models, include_ID_column=False):
+    def __init__(self, lexicon_models, include_ID_column=False, input_lexicon_lr=None):
         self.include_ID_column = include_ID_column
         self.lexicon_models = lexicon_models
         self.latex_source_filepath = None
+        self.input_lexicon_lr = input_lexicon_lr
 
 
     def display(self, dir_name, file_name):
@@ -102,7 +103,7 @@ selectional features with {num_distinct_sel_feats} distinct labels; a total of
     def get_latex_source(self):
         n = len(self.lexicon_models)
         assert 0 < n <= 5
-        lexica = [list(lm.latex()) for lm in self.lexicon_models]
+        lexica = [list(lm.latex(input_lexicon_lr=self.input_lexicon_lr)) for lm in self.lexicon_models]
         k = max([len(l) for l in lexica])
         headers = []
         if self.include_ID_column:

@@ -24,31 +24,9 @@ class ExperimentRunner:
 
 
     def run(self, checkpoint_filepath=None, run_from_checkpoint=False, verbose=False):
-        if run_from_checkpoint:
-            assert checkpoint_filepath
+        p_inference = self.inf_exp.run()
+        print("End of Inference Procedure.")
 
-        try:
-            if not(run_from_checkpoint):
-                p_inference = self.inf_exp.run()
-                detection_param_map = next(p_inference)
-
-            if checkpoint_filepath:
-                if not(run_from_checkpoint):
-                    with open(checkpoint_filepath, 'w') as f_out:
-                        json.dump(detection_param_map, f_out)
-                with open(checkpoint_filepath, 'r') as f_in:
-                    detection_param_map = json.load(f_in)
-
-            for e_idx in itertools.count(0):
-                blocking_constraints = self.process_detection_parameter_map(detection_param_map)
-                if blocking_constraints:
-                    detection_param_map = p_inference.send(blocking_constraints)
-                else:
-                    self.inf_exp.log(msg="No overgenerations were detected.")
-                    break
-        finally:
-            p_inference.close()
-            print("End of Inference Procedure.")
 
 #------------------------------------------------------------------------------#
 
@@ -88,11 +66,11 @@ class ParallelExperimentRunner(ExperimentRunner):
 
     def __init__(self, inference_experiment, db_params=None):
         if not db_params:
-            db_params = {"user": "indurks",
-                         "host": "18.21.165.206",
-                         "port": "5432",
-                         "database": "mgsmt",
-                         "password": "S1123581321i"}
+            db_params = {"user": "",
+                         "host": "",
+                         "port": "",
+                         "database": "",
+                         "password": ""}
         self.db_params = db_params
         super(ParallelExperimentRunner, self).__init__(inference_experiment)
 

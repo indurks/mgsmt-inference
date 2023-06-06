@@ -8,6 +8,7 @@ __email__ = "indurks@mit.edu"
 #------------------------------------------------------------------------------#
 
 import collections, copy, itertools, pprint as pp, uuid
+import traceback
 
 import z3
 from z3 import And, Or, Not, Implies, Xor, Distinct, If, PbEq, PbGe, PbLe
@@ -59,7 +60,7 @@ class Grammar:
     def _init_lexicon(self, init_lex_repr=None, init_lexicon_from_spec=False, verbose=False):
         s = self.solver
         if verbose:
-            s.log_msg(f"init_lexicon_from_spec: {init_lexicon_from_spec}")
+            s.log_msg(f"Initializing Lexicon From Specification: {init_lexicon_from_spec}")
         if init_lexicon_from_spec:
             self.lexicon_formula = mgsmt.formulas.lexiconformula.LexiconFormula.create_lexicon_from_spec(s,
                                                                                                          self.params['initial_lexical_items'],
@@ -71,10 +72,18 @@ class Grammar:
                                                                                                self.params)
         if verbose:
             s.log_msg('Initialized the Lexicon.')
-        if init_lex_repr:
+
+        self.init_lex_repr = None
+        
+        if init_lex_repr and init_lexicon_from_spec:
+            s.log_msg("Initializing Parsing Procedure.")
             init_lex_repr.impose_constraints_lexicon(self.lexicon_formula)
             if verbose:
                 s.log_msg("Imposed constraints on the lexicon formula from the initial lexicon representation.")
+        if init_lex_repr and not(init_lexicon_from_spec):
+            s.log_msg("Initializing Inference Procedure")
+            init_lex_repr.impose_partial_constraints_on_lexicon(self.lexicon_formula)
+            self.init_lex_repr = init_lex_repr
 
 
     def evaluate(self, extract_all_parses=False):
@@ -82,7 +91,8 @@ class Grammar:
         self.solver.evaluate_model()
         # Construct the lexicon model.
         self.lexicon_model = mgsmt.models.lexiconmodel.LexiconModel(lexicon_formula=self.lexicon_formula,
-                                                                    model=self.solver.model)
+                                                                    model=self.solver.model,
+                                                                    init_lex_repr=self.init_lex_repr)
         # Construct the derivation model(s).
         self.derivation_models = collections.OrderedDict()
         self.ic_probes = collections.OrderedDict()
@@ -125,9 +135,12 @@ class Grammar:
         self.lexicon_formula.connect_derivation(self.derivation_formulas[df_id])
 
 
-    def extract_lexicon(self, filepath=None, verbose=False):
+    def extract_lexicon(self, filepath=None, verbose=False, include_derivations=True):
+        # NEW: We should probably remove the parameter "include_derivations" as it's not needed.
+        #dms = None if not(include_derivations) else list(self.derivation_models.values())
         lr = mgsmt.experiments.lexrepr.LexRepr(lexicon_model=self.lexicon_model,
-                                               derivation_models=list(self.derivation_models.values()))
+                                               derivation_models=list(self.derivation_models.values()),
+                                               init_lex_repr=self.init_lex_repr)
         if filepath:
             lr.json(filepath)
             self.solver.log_msg(msg=f"Serialized the lexicon to disk: {filepath}")
@@ -241,12 +254,21 @@ class Grammar:
                 constraint_A = lf.lnodeType(s) != lf.LTypeSort.Inactive
                 # The starting node must map to one of the (non-null) phonological forms.
                 constraint_B = Or([lf.pf_map(s, p) for p in lf.pfInterface.non_null_nodes()])
-                # The starting node must be connected to one of the derivations.
+                # The starting node must be connected to one of the derivations,
+                # OR it must be an entry in the input lexicon.
                 constraint_C = Or([Or([And((get_bus(df_id))(lexical_d_node) == s,
                                            df.head(lexical_d_node) == lexical_d_node)
                                        for lexical_d_node in df.lex1nodes()])
                                    for df_id, df in self.derivation_formulas.items()])
-                return And(constraint_A, constraint_B, constraint_C)
+                if self.init_lex_repr:
+                    constraint_D = PbGe([(And(mgsmt.experiments.lexrepr.LexRepr._impose_constraints_lexical_entry(lf, lr_le, lexical_entry)), 1)
+                                         for lr_le in self.init_lex_repr.lex_entries],
+                                        k=1)
+                else:
+                    constraint_D = False
+
+                #return And(constraint_A, constraint_B, constraint_C)
+                return And(constraint_A, constraint_B, Or(constraint_C, constraint_D))
 
             return [(get_subterm(entry), 1) for entry in lf.entries]
         elif tag == 'num_lexical_feats':
@@ -287,12 +309,21 @@ class Grammar:
             constraint_A = lf.lnodeType(s) != lf.LTypeSort.Inactive
             # The starting node must map to one of the (non-null) phonological forms.
             constraint_B = Or([lf.pf_map(s, p) for p in lf.pfInterface.non_null_nodes()])
-            # The starting node must be connected to one of the derivations.
+            # The starting node must be connected to one of the derivations,
+            # OR it must be an entry in the input lexicon.
             constraint_C = Or([Or([And((get_bus(df_id))(lexical_d_node) == s,
                                        df.head(lexical_d_node) == lexical_d_node)
                                    for lexical_d_node in df.lex1nodes()])
                                for df_id, df in self.derivation_formulas.items()])
-            return And(constraint_A, constraint_B, constraint_C)
+            if self.init_lex_repr:
+                constraint_D = PbGe([(And(mgsmt.experiments.lexrepr.LexRepr._impose_constraints_lexical_entry(lf, lr_le, lexical_entry)), 1)
+                                     for lr_le in self.init_lex_repr.lex_entries],
+                                    k=1)
+            else:
+                constraint_D = False
+
+            #return And(constraint_A, constraint_B, constraint_C)
+            return And(constraint_A, constraint_B, Or(constraint_C, constraint_D))
 
         return PbLe([(get_term(entry), 1) for entry in lf.entries], k=k)
 

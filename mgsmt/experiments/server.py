@@ -79,12 +79,12 @@ def main(db_params, timeout=None, input_json_fp=None, verbose=False):
 
 
 if __name__ == '__main__':
-    db_params = {"user": "indurks",
-                 "host": "18.21.165.206",
-                 "port": "5432",
-                 "database": "mgsmt"}
+    db_params = {"user": "",
+                 "host": "",
+                 "port": "",
+                 "database": ""}
     #db_params["password"] = getpass.getpass("db password: ")
-    db_params["password"] = 'skrudni'
+    db_params["password"] = ''
 
     parser = argparse.ArgumentParser()
     parser.add_argument("-f", "--file",

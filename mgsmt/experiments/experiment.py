@@ -127,8 +127,6 @@ class Experiment(object):
                                      for i in ics_to_use]
         if self.verbose:
             self.log(msg='Initialized the Interface Conditions.')
-            for i, ic in enumerate(self.interface_conditions):
-                self.log(msg='Interface Condition #%d. %s'%(i, ic.json_repr()))
         self.inputseqtableview = mgsmt.views.inputsequencetableview.InputSequenceTableView(self.interface_conditions,
                                                                                            display_index=False)
         if self.params['display.jupyter-widgets']:
@@ -148,7 +146,8 @@ class Experiment(object):
             self.gw = mgsmt.views.acq_model_widget.GrammarWidget(self.grammar)
             if self.params['display.jupyter-widgets']:
                 self.gw.display()
-                lm_view = mgsmt.views.lexiconmodellatexview.LexiconModelLaTeXView([self.grammar.lexicon_model])
+                lm_view = mgsmt.views.lexiconmodellatexview.LexiconModelLaTeXView([self.grammar.lexicon_model],
+                                                                                  input_lexicon_lr=self.grammar.init_lex_repr)
                 lm_view.display(dir_name=dir_name, file_name="%s_lexicon"%(label))
                 lm_widget = LaTeXWidget(lm_view, label, dir_name)
                 lm_widget.display()
@@ -219,7 +218,7 @@ class Experiment(object):
             results_of_tasks = [f.get() for f in futures]
 
 
-    def _init_interfaces(self, include_ic_words=True, include_init_lexicon_words=True):
+    def _init_interfaces(self, include_ic_words=True, include_init_lexicon_words=True, include_input_lexicon_words=True):
         all_words = set()
         if include_ic_words:
             ic_words = set(itertools.chain(*[ic.tokens() for ic in self.interface_conditions]))
@@ -227,9 +226,18 @@ class Experiment(object):
             all_words.update(ic_words)
         if include_init_lexicon_words:
             init_lex_items = json.loads(self.params.get('initial_lexical_items', "[]"))
+            if init_lex_items != []:
+                print(f"Initial Lexical Items: {init_lex_items}")
             for entry in init_lex_items:
                 if entry['pf'] != mgsmt.formulas.pfinterfaceformula.PFInterfaceFormula.EPSILON:
                     all_words.add(entry['pf'])
+        if include_input_lexicon_words:
+            json_strs = self.get_lexicon_json_strs()
+            for lexicon_str in json_strs:
+                for entry in json.loads(lexicon_str):
+                    if entry['pf'] != mgsmt.formulas.pfinterfaceformula.PFInterfaceFormula.EPSILON:
+                        all_words.add(entry['pf'])
+        # print(f"PF WORDS = {all_words}")
         self.pf_interface = mgsmt.formulas.pfinterfaceformula.PFInterfaceFormula(solver=self.solver,
                                                                                  overt_forms=all_words,
                                                                                  covert_forms=covert_pforms)
@@ -282,13 +290,18 @@ class Experiment(object):
                                   shell=True)
 
 
-    def init_from_lexicon(self):
+    def get_lexicon_json_strs(self):
         json_strs = []
         for lex_fn in self.params['init_lexicons']:
             with open(lex_fn, 'r') as f_lex_json:
                 json_strs.append(json.dumps(json.load(f_lex_json)))
                 self.log(msg="Loading a pre-specified lexicon from: " + f_lex_json.name)
+        return json_strs
 
+
+    def init_from_lexicon(self):
+        json_strs = self.get_lexicon_json_strs()
+        
         lex_items = self.params.get('initial_lexical_items', None)
         if json_strs:
             lr = mgsmt.experiments.lexrepr.LexRepr(json_strs=json_strs)
@@ -349,11 +362,9 @@ class Experiment(object):
 
             # Optionally evaluate the model and display the inferred grammar.
             if self.params['evaluate_intermediate_steps'] or ((i + 1 == len(self.interface_conditions)) and i > 0):
-                print(f"i: {i}, and len(self.interface_conditions) = {len(self.interface_conditions)}.")
-                print(f"self.params['evaluate_intermediate_steps'] = {self.params['evaluate_intermediate_steps']}.")
                 self.grammar.evaluate()
                 lex_fn = 'test-serialization-lexicon-step-%d.json'%(i+1)
-                final_lexicon, per_dm_lexicons = self.grammar.extract_lexicon(lex_fn)
+                final_lexicon, per_dm_lexicons = self.grammar.extract_lexicon(filepath=None)
                 self.output['intermediate_lexicon_%d'%(i+1)] = final_lexicon
                 if i >= len(self.interface_conditions) - 1:
                     if self.params['display.jupyter-widgets'] and include_pf_constraints:

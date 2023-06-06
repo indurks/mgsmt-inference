@@ -19,7 +19,7 @@ import mgsmt.formulas.lexiconformula
 
 class LexiconModel:
 
-    def __init__(self, lexicon_formula, model):
+    def __init__(self, lexicon_formula, model, init_lex_repr=None):
         assert isinstance(lexicon_formula,
                           mgsmt.formulas.lexiconformula.LexiconFormula)
         self.formula = lexicon_formula
@@ -42,6 +42,15 @@ class LexiconModel:
                     if self.model.evaluate(And(head(d_node) != null_node,
                                                bus(d_node) == l_node)):
                         active_start_nodes.add(l_node)
+        
+        # NEW: let's also add in the active start nodes that are part of the
+        # input lexicon.
+        if init_lex_repr:
+            for lf_le in self.formula.entries:
+                for lr_le in init_lex_repr.lex_entries:
+                    term = mgsmt.experiments.lexrepr.LexRepr._impose_constraints_lexical_entry(self.formula, lr_le, lf_le)
+                    if self.model.evaluate(And(term)):
+                        active_start_nodes.add(lf_le.nodes[0])
 
         self.lexical_entries = {}
         crossings = self.get_pf_lexicon_crossing_occurrences()
@@ -57,7 +66,7 @@ class LexiconModel:
             }
 
 
-    def get_pf_lexicon_crossing_occurrences(self):
+    def get_pf_lexicon_crossing_occurrences(self, input_lexicon_lr=None):
         # Compute the stripped down (factored) lexicon.
         crossings = {}
         m_eval = self.model.evaluate
@@ -73,7 +82,15 @@ class LexiconModel:
                                           lf.pf_map(l_node, pf_node))
                                       for df_id, df_entry in ds.items()
                                       for d_node in df_entry['formula'].lex1nodes()]))
-                crossings[(pf_node, l_node)] = occurred
+                # Alternatively, it could be that a crossing was established due to the input lexicon.
+                crossing_from_input_lexicon = False
+                if input_lexicon_lr:
+                    crossing_from_input_lexicon = any(
+                        [m_eval(And(mgsmt.experiments.lexrepr.LexRepr._impose_constraints_lexical_entry(lf, lr_le, lex_entry)))
+                         for lr_le in input_lexicon_lr.lex_entries
+                         if lr_le.pf == lf.pfInterface.get_pf(pf_node)]
+                    )
+                crossings[(pf_node, l_node)] = occurred or crossing_from_input_lexicon
                 for x in lex_entry.nodes[1:]:
                     crossings[(pf_node, x)] = False
         return crossings
@@ -158,8 +175,8 @@ class LexiconModel:
     def json_repr(self):
         return '[%s]'%(', '.join('"%s"'%(x) for x in self.pp_str_repr(display_index=False)))
 
-    def latex(self):
-        crossings = self.get_pf_lexicon_crossing_occurrences()
+    def latex(self, input_lexicon_lr=None):
+        crossings = self.get_pf_lexicon_crossing_occurrences(input_lexicon_lr=input_lexicon_lr)
         for le in sorted(self.lexical_entries.values(),
                          key=lambda x: (x['pfs'], len(x['features']))):
             raw_pf_strs, feats, cat_str = self.get_lexical_entry_components(le, LaTeX=True)

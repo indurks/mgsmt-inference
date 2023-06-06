@@ -128,7 +128,6 @@ def serialize_model_values(derivation_model):
 
     # Extract values for unary functions.
     def serialize_unary_func(fn):
-        print("function = " + str(fn))
         return [[serialize_value(node, dm) for node in  [x, m_eval(fn(x))]]
                 for x in df.all_nodes()]
 

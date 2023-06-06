@@ -99,7 +99,7 @@ class InferenceExperiment(experiment.Experiment):
 
 
     def extract_lexicon(self):
-        final_lexicon, per_dm_lexicons = self.grammar.extract_lexicon()
+        final_lexicon, per_dm_lexicons = self.grammar.extract_lexicon(include_derivations=False)#experiment_type="inference")
         self.output['final_lexicon'] = final_lexicon
         self.output['per_dm_lexicons'] = per_dm_lexicons
 
@@ -130,7 +130,7 @@ class InferenceExperiment(experiment.Experiment):
         self.wisdom_history = []
 
         try:
-            self.initialize_model()
+            self.initialize_model(init_lexicon_from_spec=False)
             model_values = self.load_model_values()
             # Todo: "include_pf_constraints" should be refactored to "constrain_pf"
             self.constrain_model_with_input_sequence(
@@ -144,18 +144,7 @@ class InferenceExperiment(experiment.Experiment):
             self.optstack.prime_stack(wisdom=self.params['wisdom'])
             self.update_wisdom_history()
             self.serialize_model_values()
-
-            while True:
-                self.extract_lexicon()
-                # Detect over-generations.
-                ogd_experiment_results = yield self.overgeneration_tests()
-                self.ogd_experiment_results_history.append(ogd_experiment_results)
-                if self.constrain_grammar(ogd_experiment_results):
-                    break
-
             self.extract_lexicon()
-            if self.params['display.jupyter-widgets']:
-                self.create_final_report(output_dir=self.logging_summary_dir)
         except GeneratorExit:
             self.log(msg="Exiting the inference procedure.")
         except:
@@ -164,10 +153,8 @@ class InferenceExperiment(experiment.Experiment):
             raise
         finally:
             self.log(msg=f"Wisdom History: {len(self.wisdom_history)}.")
-            self.log(msg=f"OvergenerationDetection Results: {len(self.ogd_experiment_results_history)}.")
             shutil.copy(self.config_filename, self.logging_summary_dir)
             self.log(msg="End of program.")
             self.log_file.close()
             if self.params['display.jupyter-widgets']:
                 shutil.copy(self.log_file.name, self.logging_summary_dir)
-            #return self.output
